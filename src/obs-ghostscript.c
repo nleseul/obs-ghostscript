@@ -337,7 +337,7 @@ static void pdf_source_defaults(obs_data_t *settings)
 }
 
 struct obs_source_info pdf_source_info = {
-	.id             = "obs_pdf",
+	.id             = "obs_ghostscript",
 	.type           = OBS_SOURCE_TYPE_INPUT,
 	.output_flags   = OBS_SOURCE_VIDEO | OBS_SOURCE_INTERACTION,
 	.create         = pdf_source_create,
@@ -354,7 +354,7 @@ struct obs_source_info pdf_source_info = {
 };
 
 OBS_DECLARE_MODULE()
-OBS_MODULE_USE_DEFAULT_LOCALE("obs-pdf", "en-US")
+OBS_MODULE_USE_DEFAULT_LOCALE("obs-ghostscript", "en-US")
 
 bool obs_module_load(void)
 {
