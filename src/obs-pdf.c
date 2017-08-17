@@ -4,8 +4,17 @@
 #include <stdio.h>
 #include <inttypes.h>
 
+// Ghostscript expects a non-standard #define for indicating a Windows environment, apparently.
+// This ensures the Ghostscript API functions are referenced by the linker with the correct
+// calling convention (on x86). 
+#ifdef _WIN32
+#define _WINDOWS_
+#endif
+
 #include <psi/iapi.h>
 #include <devices/gdevdsp.h>
+
+#include <config.h>
 
 static void *shared_ghostscript_instance = NULL;
 
@@ -110,29 +119,6 @@ display_callback display =
 	NULL
 };
 
-static int ghostscript_stdin(void *instance, char *buf, int len)
-{
-	return 0;
-}
-
-static int ghostscript_stdout(void *instance, const char *str, int len)
-{
-	char buffer[256];
-	snprintf(buffer, 256, "gs-out: %.*s", len, str);
-	blog(LOG_INFO, buffer);
-
-	return len;
-}
-
-static int ghostscript_stderr(void *instance, const char *str, int len)
-{
-	char buffer[256];
-	snprintf(buffer, 256, "gs-err: %.*s", len, str);
-	blog(LOG_ERROR, buffer);
-
-	return len;
-}
-
 
 static void pdf_source_load(struct pdf_source *context)
 {
@@ -162,13 +148,19 @@ static void pdf_source_load(struct pdf_source *context)
 
 		int gs_argc = sizeof(gs_argv) / sizeof(gs_argv[0]);
 
-		int code = gsapi_init_with_args(shared_ghostscript_instance, gs_argc, gs_argv);
-		
+		// Here, we execute the Ghostscript command to parse the file and render the document. The display device
+		// callbacks indicated above will handle copying the Ghostscript buffer into an OBS texture if any page is
+		// rendered. 
+		gsapi_init_with_args(shared_ghostscript_instance, gs_argc, gs_argv);
 		gsapi_exit(shared_ghostscript_instance);
 	}
 
 	if (!context->cached_anypagesrendered)
 	{
+		// If the ghostscript_display_page() callback above was never called, that means the commands issued
+		// to Ghostscript did not result in a page in the document being rendered. That is most likely to happen
+		// if the document does not contain the requested page number. We simply destroy the texture and render
+		// nothing in that case. 
 		obs_enter_graphics();
 		gs_texture_destroy(context->texture);
 		context->texture = NULL;
@@ -367,7 +359,6 @@ OBS_MODULE_USE_DEFAULT_LOCALE("obs-pdf", "en-US")
 bool obs_module_load(void)
 {
 	gsapi_new_instance(&shared_ghostscript_instance, NULL);
-	gsapi_set_stdio(shared_ghostscript_instance, ghostscript_stdin, ghostscript_stdout, ghostscript_stderr);
 	gsapi_set_display_callback(shared_ghostscript_instance, &display);
 
 	obs_register_source(&pdf_source_info);
