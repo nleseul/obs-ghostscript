@@ -34,6 +34,8 @@ struct pdf_source {
 	unsigned char *cached_raster;
 	bool cached_anypagesrendered;
 
+	obs_hotkey_pair_id change_page_hotkey_pair;
+
 	obs_source_t *src;
 };
 
@@ -170,6 +172,45 @@ static void pdf_source_load(struct pdf_source *context)
 }
 
 
+static void pdf_source_change_page(struct pdf_source *context,
+	bool change_to_previous)
+{
+	if (change_to_previous && context->page_number > 1)
+	{
+		context->page_number--;
+	}
+	else if (!change_to_previous && context->page_number < 9999)
+	{
+		context->page_number++;
+	}
+
+	pdf_source_load(context);
+}
+
+
+static bool pdf_source_hotkey_prev(void *data, obs_hotkey_pair_id id,
+	obs_hotkey_t *hotkey, bool pressed)
+{
+	if (pressed)
+	{
+		pdf_source_change_page(data, true);
+	}
+
+	return true;
+}
+
+static bool pdf_source_hotkey_next(void *data, obs_hotkey_pair_id id,
+	obs_hotkey_t *hotkey, bool pressed)
+{
+	if (pressed)
+	{
+		pdf_source_change_page(data, false);
+	}
+
+	return true;
+}
+
+
 static const char *pdf_source_get_name(void *unused)
 {
 	UNUSED_PARAMETER(unused);
@@ -193,10 +234,13 @@ static void pdf_source_update(void *data, obs_data_t *settings)
 
 static void *pdf_source_create(obs_data_t *settings, obs_source_t *source)
 {
-	UNUSED_PARAMETER(source);
-
 	struct pdf_source *context = bzalloc(sizeof(struct pdf_source));
 	context->src = source;
+
+	context->change_page_hotkey_pair = obs_hotkey_pair_register_source(source, 
+		"PdfSource.PrevPage", obs_module_text("PdfSource.PrevPage"),
+		"PdfSource.NextPage", obs_module_text("PdfSource.NextPage"),
+		pdf_source_hotkey_prev, pdf_source_hotkey_next, context, context);
 	
 	pdf_source_update(context, settings);
 
@@ -218,6 +262,9 @@ static void pdf_source_destroy(void *data)
 		gs_texture_destroy(context->texture);
 		context->texture = NULL;
 	}
+
+	obs_hotkey_pair_unregister(context->change_page_hotkey_pair);
+	context->change_page_hotkey_pair = OBS_INVALID_HOTKEY_PAIR_ID;
 
 	bfree(context);
 }
@@ -264,21 +311,6 @@ static void pdf_source_render(void *data, gs_effect_t *effect)
 		gs_draw_sprite(context->texture, 0,
 			context->width, context->height);
 	}
-}
-
-static void pdf_source_change_page(struct pdf_source *context, 
-	bool change_to_previous)
-{
-	if (change_to_previous && context->page_number > 1)
-	{
-		context->page_number--;
-	}
-	else if (!change_to_previous && context->page_number < 9999)
-	{
-		context->page_number++;
-	}
-
-	pdf_source_load(context);
 }
 
 static void pdf_source_key_click(void *data,
