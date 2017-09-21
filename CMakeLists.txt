@@ -43,13 +43,6 @@ if (NOT GHOSTSCRIPT_INCLUDE_DIR OR NOT GHOSTSCRIPT_LIB_DIR)
     message("Ghostscript headers or libraries could not be found! Please ensure that Ghostscript is installed somewhere, and set the GSSourcePath and GSLibraryPath variables if necessary.")
 endif()
 
-# Check if the libobs being referenced has support for arrow key navigation when interacting with a source.
-
-set(CMAKE_REQUIRED_INCLUDES ${OBSSourcePath})
-
-check_c_source_compiles("#include <obs-interaction.h>
-    int main() { struct obs_key_event e; return e.navigation_keys; }" OBS_HAS_NAVKEY_SUPPORT)
-
 configure_file(${CMAKE_SOURCE_DIR}/src/config.h.in ${CMAKE_BINARY_DIR}/config/config.h)
 	
 # Source

@@ -1,3 +1,1 @@
 #pragma once
-
-#cmakedefine OBS_HAS_NAVKEY_SUPPORT 1

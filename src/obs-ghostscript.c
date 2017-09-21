@@ -1,4 +1,5 @@
 #include <obs-module.h>
+#include <obs-hotkey.h>
 #include <util/dstr.h>
 
 #include <stdio.h>
@@ -287,20 +288,20 @@ static void pdf_source_key_click(void *data,
 
 	if (!key_up)
 	{
-#ifdef OBS_HAS_NAVKEY_SUPPORT
-		switch (event->navigation_keys)
-		{
-			case NAVKEY_DOWN:
-			case NAVKEY_NEXTPAGE:
-				pdf_source_change_page(context, false);
-				break;
+		enum obs_key_t key = obs_key_from_virtual_key(event->native_vkey);
 
-			case NAVKEY_UP:
-			case NAVKEY_PREVPAGE:
+		switch (key)
+		{
+			case OBS_KEY_UP:
+			case OBS_KEY_PAGEUP:
 				pdf_source_change_page(context, true);
 				break;
+
+			case OBS_KEY_DOWN:
+			case OBS_KEY_PAGEDOWN:
+				pdf_source_change_page(context, false);
+				break;
 		}
-#endif
 	}
 }
 
@@ -349,8 +350,8 @@ struct obs_source_info pdf_source_info = {
 	.get_height     = pdf_source_getheight,
 	.video_render   = pdf_source_render,
 	.get_properties = pdf_source_properties,
-	.key_click		= pdf_source_key_click,
-	.mouse_wheel	= pdf_source_mouse_wheel
+	.key_click      = pdf_source_key_click,
+	.mouse_wheel    = pdf_source_mouse_wheel
 };
 
 OBS_DECLARE_MODULE()
