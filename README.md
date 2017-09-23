@@ -35,9 +35,12 @@ necessary files should look like this:
 The source is called "PDF Document (Ghostscript)" in OBS Studio's source creation menu. The properties to set
 on it are the path to the document file and the page from the document which should be shown. 
 
-By right-clicking on the source and choosing "Interact", you can manipulate the current page more quickly while
-recording/streaming than the source properties dialog allows. With the source displayed in an interaction window,
-you can scroll your mouse wheel and change the displayed page. (Note that the source will only receive mouse 
+Hotkeys are provided to modify the displayed page more quickly while recording/streaming than the source 
+properties dialog allows. These can be set through the main Hotkeys tab in the OBS Studio settings. 
+
+You can also manipulate the current page by right-clicking on the source and choosing "Interact".
+With the source displayed in an interaction window, you can scroll your mouse wheel and change the 
+displayed page, or use the arrow keys or PgUp/PgDown keys. (Note that the source will only receive mouse 
 events if the mouse is hovered over the image shown in the intraction window.)
 
 ## Building
