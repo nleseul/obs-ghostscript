@@ -1,4 +1,13 @@
 cmake_minimum_required (VERSION 2.8.12)
+
+foreach(flag_var
+        CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
+        CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELWITHDEBINFO)
+   if(${flag_var} MATCHES "/MD")
+      string(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
+   endif(${flag_var} MATCHES "/MD")
+endforeach(flag_var)
+
 project (obs-ghostscript)
 
 include(CheckCSourceCompiles)
@@ -68,3 +77,8 @@ add_library (gsdll SHARED IMPORTED)
 set_property (TARGET gsdll PROPERTY IMPORTED_LOCATION ${GHOSTSCRIPT_LIB_DIR}/gsdll${_lib_suffix}.dll)
 set_property (TARGET gsdll PROPERTY IMPORTED_IMPLIB ${GHOSTSCRIPT_LIB_DIR}/gsdll${_lib_suffix}.lib)
 target_link_libraries (${PROJECT_NAME} gsdll)
+
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION obs-plugins/${_lib_suffix}bit)
+install(FILES ${CMAKE_BINARY_DIR}/Debug/${PROJECT_NAME}.pdb DESTINATION obs-plugins/${_lib_suffix}bit CONFIGURATIONS Debug)
+install(FILES ${GHOSTSCRIPT_LIB_DIR}/gsdll${_lib_suffix}.dll DESTINATION obs-plugins/${_lib_suffix}bit)
+install(DIRECTORY data/ DESTINATION data/obs-plugins/${PROJECT_NAME}/)
