@@ -43,6 +43,17 @@ With the source displayed in an interaction window, you can scroll your mouse wh
 displayed page, or use the arrow keys or PgUp/PgDown keys. (Note that the source will only receive mouse 
 events if the mouse is hovered over the image shown in the intraction window.)
 
+If the native size of the document is not appropriate for your use case, you can specify settings which
+will control the size at which it will be rendered. Selecting "Override DPI" and changing the "DPI" option
+will change the DPI (dots per inch) used when rendering. Increasing this will increase the size in pixels
+of the document proportionally. 
+
+You can also specify the page size Ghostscript uses when interpreting the document by selecting "Override Page
+Size" and specifying a width and height. These values are in points, not pixels; 1 point is 1/72 inch. The 
+conversion from points to rendered pixels is dependent on the DPI setting, either that contained in the document
+or the one specified in the source properties. You can choose whether Ghostscript will scale the contents of the 
+document to fit this page size or not as well, but that option is specific to PDF documents.
+
 ## Building
 
 If you wish to build the obs-ghostscript plugin from source, you should just need [CMake](https://cmake.org/), 
@@ -73,9 +84,9 @@ properly set up:
   containing the two aforementioned headers).
 * GSLibraryPath should refer to a folder containing the gsdll[32|64].lib binary libraries. 
 
-Note that the build pipeline will not copy the generated DLLs to an OBS Studio installation; you will need 
-to do that manually, to the locations described above. Make sure to copy the gsdll[32|64].dll from the 
-Ghostscript binary folder as well. 
+Installation logic is provided through CMake as well; you can set the CMAKE_INSTALL_PREFIX configuration value 
+to choose the folder to which the files will be copied. You can also manually copy all files to the locations 
+described above.
 
 ## License
 
