@@ -1,5 +1,6 @@
 #include <obs-module.h>
 #include <obs-hotkey.h>
+#include <util/darray.h>
 #include <util/dstr.h>
 
 #include <stdio.h>
@@ -27,6 +28,14 @@ struct pdf_source {
 	uint32_t width;
 	uint32_t height;
 	gs_texture_t *texture;
+
+	bool should_override_page_size;
+	int override_width;
+	int override_height;
+	bool override_fit_to_page;
+
+	bool should_override_dpi;
+	int override_dpi;
 
 	int cached_rasterwidth;
 	int cached_rasterheight;
@@ -82,7 +91,7 @@ static int ghostscript_display_page(void *handle, void *device, int copies, int 
 
 	obs_enter_graphics();
 
-	if (context->texture != NULL)
+	if (context->texture != NULL && (context->width != context->cached_rasterwidth || context->height != context->cached_rasterheight))
 	{
 		gs_texture_destroy(context->texture);
 		context->texture = NULL;
@@ -91,7 +100,16 @@ static int ghostscript_display_page(void *handle, void *device, int copies, int 
 	context->cached_anypagesrendered = true;
 	context->width = context->cached_rasterwidth;
 	context->height = context->cached_rasterheight;
-	context->texture = gs_texture_create(context->cached_rasterrowsizeinbytes / 4, context->cached_rasterheight, GS_BGRX, 1, &context->cached_raster, 0);
+
+	if (context->texture == NULL)
+	{
+		context->texture = gs_texture_create(context->cached_rasterrowsizeinbytes / 4, context->cached_rasterheight, 
+			GS_BGRX, 1, &context->cached_raster, GS_DYNAMIC);
+	}
+	else
+	{
+		gs_texture_set_image(context->texture, context->cached_raster, context->cached_rasterrowsizeinbytes, false);
+	}
 
 	obs_leave_graphics();
 
@@ -125,40 +143,74 @@ display_callback display =
 
 static void pdf_source_load(struct pdf_source *context)
 {
-	char display_format_buffer[32] = { 0 };
-	char display_handle_buffer[32] = { 0 };
-	char page_list_buffer[32] = { 0 };
-
-	snprintf(display_format_buffer, 32, "-dDisplayFormat=%d", DISPLAY_COLORS_RGB | DISPLAY_UNUSED_LAST |
-		DISPLAY_DEPTH_8 | DISPLAY_LITTLEENDIAN | DISPLAY_TOPFIRST);
-	snprintf(display_handle_buffer, 32, "-sDisplayHandle=16#%"PRIx64"", (uint64_t)context);
-	snprintf(page_list_buffer, 32, "-sPageList=%d", context->page_number);
+	DARRAY(char *) arguments;
 
 	context->cached_anypagesrendered = false;
 
 	if (context->file_path != NULL)
 	{
-		char *gs_argv[] =
-		{
-			"obs", // Ignored
-			"-sDEVICE=display",
-			display_handle_buffer,
-			display_format_buffer,
-			page_list_buffer,
-			"-f",
-			context->file_path
-		};
+		char *command_ignored = "gs";
+		char *device_type = "-sDEVICE=display";
+		struct dstr display_format_buffer = { 0 };
+		struct dstr display_handle_buffer = { 0 };
+		struct dstr page_list_buffer = { 0 };
+		char *file_flag = "-f";
 
-		int gs_argc = sizeof(gs_argv) / sizeof(gs_argv[0]);
+		dstr_printf(&display_format_buffer, "-dDisplayFormat=%d", DISPLAY_COLORS_RGB | DISPLAY_UNUSED_LAST |
+			DISPLAY_DEPTH_8 | DISPLAY_LITTLEENDIAN | DISPLAY_TOPFIRST);
+		dstr_printf(&display_handle_buffer, "-sDisplayHandle=16#%"PRIx64"", (uint64_t)context);
+		dstr_printf(&page_list_buffer, "-sPageList=%d", context->page_number);
+
+		da_init(arguments);
+
+		da_push_back(arguments, &command_ignored);
+		da_push_back(arguments, &device_type);
+		da_push_back(arguments, &display_handle_buffer.array);
+		da_push_back(arguments, &display_format_buffer.array);
+		da_push_back(arguments, &page_list_buffer.array);
+
+		if (context->should_override_page_size)
+		{
+			char *fixed_media = "-dFIXEDMEDIA";
+			struct dstr width_buffer = { 0 };
+			struct dstr height_buffer = { 0 };
+
+			dstr_printf(&width_buffer, "-dDEVICEWIDTHPOINTS=%d", context->override_width);
+			dstr_printf(&height_buffer, "-dDEVICEHEIGHTPOINTS=%d", context->override_height);
+
+			da_push_back(arguments, &fixed_media);
+
+			if (context->override_fit_to_page)
+			{
+				char *fit_page = "-dPDFFitPage";
+				da_push_back(arguments, &fit_page);
+			}
+
+			da_push_back(arguments, &width_buffer.array);
+			da_push_back(arguments, &height_buffer.array);
+		}
+
+		if (context->should_override_dpi)
+		{
+			struct dstr dpi_buffer = { 0 };
+
+			dstr_printf(&dpi_buffer, "-r%d", context->override_dpi);
+			da_push_back(arguments, &dpi_buffer.array);
+		}
+
+		da_push_back(arguments, &file_flag);
+		da_push_back(arguments, &context->file_path);
 
 		// Here, we execute the Ghostscript command to parse the file and render the document. The display device
 		// callbacks indicated above will handle copying the Ghostscript buffer into an OBS texture if any page is
 		// rendered. 
-		gsapi_init_with_args(shared_ghostscript_instance, gs_argc, gs_argv);
+		gsapi_init_with_args(shared_ghostscript_instance, (int)arguments.num, arguments.array);
 		gsapi_exit(shared_ghostscript_instance);
+
+		da_free(arguments);
 	}
 
-	if (!context->cached_anypagesrendered)
+	if (!context->cached_anypagesrendered && context->texture != NULL)
 	{
 		// If the ghostscript_display_page() callback above was never called, that means the commands issued
 		// to Ghostscript did not result in a page in the document being rendered. That is most likely to happen
@@ -210,6 +262,29 @@ static bool pdf_source_hotkey_next(void *data, obs_hotkey_pair_id id,
 	return true;
 }
 
+static bool pdf_source_override_size_changed(obs_properties_t *props,
+	obs_property_t *property, obs_data_t *settings)
+{
+	bool should_override_size = obs_data_get_bool(settings, "should_override_page_size");
+
+	obs_property_set_visible(obs_properties_get(props, "override_width"), should_override_size);
+	obs_property_set_visible(obs_properties_get(props, "override_height"), should_override_size);
+	obs_property_set_visible(obs_properties_get(props, "override_fit_to_page"), should_override_size);
+
+	return true;
+}
+
+static bool pdf_source_override_dpi_changed(obs_properties_t *props,
+	obs_property_t *property, obs_data_t *settings)
+{
+	bool should_override_dpi = obs_data_get_bool(settings, "should_override_dpi");
+
+	obs_property_set_visible(obs_properties_get(props, "override_dpi"), should_override_dpi);
+
+	return true;
+}
+
+
 
 static const char *pdf_source_get_name(void *unused)
 {
@@ -228,6 +303,14 @@ static void pdf_source_update(void *data, obs_data_t *settings)
 	}
 	context->file_path = bstrdup(file_path);
 	context->page_number = (unsigned int)obs_data_get_int(settings, "page_number");
+
+	context->should_override_page_size = obs_data_get_bool(settings, "should_override_page_size");
+	context->override_width = (int)obs_data_get_int(settings, "override_width");
+	context->override_height = (int)obs_data_get_int(settings, "override_height");
+	context->override_fit_to_page = obs_data_get_bool(settings, "override_fit_to_page");
+
+	context->should_override_dpi = obs_data_get_bool(settings, "should_override_dpi");
+	context->override_dpi = (int)obs_data_get_int(settings, "override_dpi");
 
 	pdf_source_load(context);
 }
@@ -294,6 +377,19 @@ static obs_properties_t *pdf_source_properties(void *data)
 		obs_module_text("PdfSource.FileName"), OBS_PATH_FILE, file_type_filter, path.array);
 
 	obs_properties_add_int(props, "page_number", obs_module_text("PdfSource.PageNumber"), 1, 9999, 1);
+
+	obs_property_t *should_override_page_size_prop = obs_properties_add_bool(props, "should_override_page_size",
+		obs_module_text("PdfSource.ShouldOverridePageSize"));
+	obs_properties_add_int(props, "override_width", obs_module_text("PdfSource.OverridePageSize.Width"), 1, INT_MAX, 1);
+	obs_properties_add_int(props, "override_height", obs_module_text("PdfSource.OverridePageSize.Height"), 1, INT_MAX, 1);
+	obs_properties_add_bool(props, "override_fit_to_page", obs_module_text("PdfSource.OverridePageSize.FitToPage"));
+
+	obs_property_t *should_override_dpi_prop = obs_properties_add_bool(props, "should_override_dpi",
+		obs_module_text("PdfSource.ShouldOverrideDpi"));
+	obs_properties_add_int(props, "override_dpi", obs_module_text("PdfSource.OverrideDpi"), 1, 600, 1);
+
+	obs_property_set_modified_callback(should_override_page_size_prop, pdf_source_override_size_changed);
+	obs_property_set_modified_callback(should_override_dpi_prop, pdf_source_override_dpi_changed);
 
 	return props;
 }
@@ -367,6 +463,10 @@ static uint32_t pdf_source_getheight(void *data)
 static void pdf_source_defaults(obs_data_t *settings)
 {
 	obs_data_set_default_int(settings, "page_number", 1);
+	obs_data_set_default_bool(settings, "should_override_page_size", false);
+	obs_data_set_default_bool(settings, "override_fit_to_page", true);
+	obs_data_set_default_bool(settings, "should_override_dpi", false);
+	obs_data_set_default_int(settings, "override_dpi", 72);
 }
 
 struct obs_source_info pdf_source_info = {
