@@ -378,15 +378,15 @@ static obs_properties_t *pdf_source_properties(void *data)
 
 	obs_properties_add_int(props, "page_number", obs_module_text("PdfSource.PageNumber"), 1, 9999, 1);
 
+	obs_property_t *should_override_dpi_prop = obs_properties_add_bool(props, "should_override_dpi",
+		obs_module_text("PdfSource.ShouldOverrideDpi"));
+	obs_properties_add_int(props, "override_dpi", obs_module_text("PdfSource.OverrideDpi"), 1, 600, 1);
+
 	obs_property_t *should_override_page_size_prop = obs_properties_add_bool(props, "should_override_page_size",
 		obs_module_text("PdfSource.ShouldOverridePageSize"));
 	obs_properties_add_int(props, "override_width", obs_module_text("PdfSource.OverridePageSize.Width"), 1, INT_MAX, 1);
 	obs_properties_add_int(props, "override_height", obs_module_text("PdfSource.OverridePageSize.Height"), 1, INT_MAX, 1);
 	obs_properties_add_bool(props, "override_fit_to_page", obs_module_text("PdfSource.OverridePageSize.FitToPage"));
-
-	obs_property_t *should_override_dpi_prop = obs_properties_add_bool(props, "should_override_dpi",
-		obs_module_text("PdfSource.ShouldOverrideDpi"));
-	obs_properties_add_int(props, "override_dpi", obs_module_text("PdfSource.OverrideDpi"), 1, 600, 1);
 
 	obs_property_set_modified_callback(should_override_page_size_prop, pdf_source_override_size_changed);
 	obs_property_set_modified_callback(should_override_dpi_prop, pdf_source_override_dpi_changed);
