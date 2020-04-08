@@ -43,6 +43,8 @@ struct pdf_source {
 	unsigned char *cached_raster;
 	bool cached_anypagesrendered;
 
+	char *password;
+
 	obs_hotkey_pair_id change_page_hotkey_pair;
 
 	obs_source_t *src;
@@ -168,6 +170,14 @@ static void pdf_source_load(struct pdf_source *context)
 		da_push_back(arguments, &display_handle_buffer.array);
 		da_push_back(arguments, &display_format_buffer.array);
 		da_push_back(arguments, &page_list_buffer.array);
+
+		if (context->password != NULL && strcmp(context->password, "") != 0)
+		{
+			struct dstr password_buffer = { 0 };
+			dstr_printf(&password_buffer, "-sPDFPassword=%s", context->password);
+
+			da_push_back(arguments, &password_buffer.array);
+		}
 
 		if (context->should_override_page_size)
 		{
@@ -296,6 +306,7 @@ static void pdf_source_update(void *data, obs_data_t *settings)
 {
 	struct pdf_source *context = data;
 	const char *file_path = obs_data_get_string(settings, "file_path");
+	const char *password = obs_data_get_string(settings, "password");
 
 	if (context->file_path != NULL)
 	{
@@ -303,6 +314,12 @@ static void pdf_source_update(void *data, obs_data_t *settings)
 	}
 	context->file_path = bstrdup(file_path);
 	context->page_number = (unsigned int)obs_data_get_int(settings, "page_number");
+
+	if (context->password != NULL)
+	{
+		bfree(context->password);
+	}
+	context->password = bstrdup(password);
 
 	context->should_override_page_size = obs_data_get_bool(settings, "should_override_page_size");
 	context->override_width = (int)obs_data_get_int(settings, "override_width");
@@ -338,6 +355,12 @@ static void pdf_source_destroy(void *data)
 	{
 		bfree(context->file_path);
 		context->file_path = NULL;
+	}
+
+	if (context->password != NULL)
+	{
+		bfree(context->password);
+		context->password = NULL;
 	}
 
 	if (context->texture != NULL)
@@ -377,6 +400,8 @@ static obs_properties_t *pdf_source_properties(void *data)
 		obs_module_text("PdfSource.FileName"), OBS_PATH_FILE, file_type_filter, path.array);
 
 	obs_properties_add_int(props, "page_number", obs_module_text("PdfSource.PageNumber"), 1, 9999, 1);
+
+	obs_properties_add_text(props, "password", obs_module_text("PdfSource.Password"), OBS_TEXT_PASSWORD);
 
 	obs_property_t *should_override_dpi_prop = obs_properties_add_bool(props, "should_override_dpi",
 		obs_module_text("PdfSource.ShouldOverrideDpi"));
