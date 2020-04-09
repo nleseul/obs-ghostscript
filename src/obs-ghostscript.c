@@ -14,8 +14,13 @@
 #define _WINDOWS_
 #endif
 
+#ifdef GS_IN_SOURCE_TREE
+#include <devices/gdevdsp.h>
+#include <psi/iapi.h>
+#else
 #include <ghostscript/gdevdsp.h>
 #include <ghostscript/iapi.h>
+#endif
 
 #include <config.h>
 

@@ -19,6 +19,18 @@ else()
     message("OBSSourcePath is missing. Please set this variable to the location of the OBS source (e.g., C:/Dev/obs-studio/libobs/).")
 endif()
 
+if (NOT OBSLibaryPath AND NOT DEFINED ENV{OBSLibraryPath})
+    set (OBSLibraryPath "" CACHE PATH "Path to OBS libraries (e.g., C:/Dev/obs-studio/build64/libobs/Release/)")
+endif()
+
+if (NOT GSSourcePath AND NOT DEFINED ENV{GSSourcePath})
+    set (GSSourcePath "" CACHE PATH "Path to Ghostscript source code (e.g., C:/Dev/gnu-ghostscript-9.21/)")
+endif()
+
+if (NOT GSLibraryPath AND NOT DEFINED ENV{GSLibraryPath})
+    set (GSLibraryPath "" CACHE PATH "Path to Ghostscript libraries (e.g., C:/Program Files/gs/gs9.21/bin)")
+endif()
+
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 	set(_lib_suffix 64)
 else()
@@ -29,12 +41,21 @@ find_library(OBS_LIB_PATH
     NAMES obs
     HINTS
         ${OBSLibraryPath})
-        
+
 find_path(GHOSTSCRIPT_INCLUDE_DIR
     NAMES ghostscript/iapi.h ghostscript/gdevdsp.h
-    HINTS ${GSSourcePath}
-    PATHS
-        /usr/include /usr/local/include /opt/local/include /sw/include)
+    HINTS ${GSSourcePath})
+
+find_path(GHOSTSCRIPT_SOURCE_DIR
+        NAMES psi/iapi.h devices/gdevdsp.h
+        HINTS ${GSSourcePath})
+
+if (GHOSTSCRIPT_SOURCE_DIR AND NOT GHOSTSCRIPT_INCLUDE_DIR)
+    set(GHOSTSCRIPT_INCLUDE_DIR ${GHOSTSCRIPT_SOURCE_DIR})
+    set(GHOSTSCRIPT_IN_SOURCE_TREE 1)
+else()
+    set(GHOSTSCRIPT_IN_SOURCE_TREE 0)
+endif()
         
 find_library(GHOSTSCRIPT_LIB_PATH
     NAMES libgs.so gsdll${_lib_suffix}.lib
@@ -60,20 +81,38 @@ add_library (${PROJECT_NAME} SHARED
 # libobs
 include_directories(${OBSSourcePath})
 add_library (libobs SHARED IMPORTED)
-set_property (TARGET libobs PROPERTY IMPORTED_LOCATION ${OBS_LIB_PATH})
+if (WIN32)
+    get_filename_component(_obs_lib_dir ${OBS_LIB_PATH} DIRECTORY)
+
+    set_property (TARGET libobs PROPERTY IMPORTED_IMPLIB ${OBS_LIB_PATH})
+    set_property (TARGET libobs PROPERTY IMPORTED_LOCATION ${_obs_lib_dir}/obs.dll)
+else()
+    set_property (TARGET libobs PROPERTY IMPORTED_LOCATION ${OBS_LIB_PATH})
+endif()
 target_link_libraries (${PROJECT_NAME} libobs)
 
 # Ghostscript
 include_directories(${GHOSTSCRIPT_INCLUDE_DIR})
 add_library (libgs SHARED IMPORTED)
-set_property (TARGET libgs PROPERTY IMPORTED_LOCATION ${GHOSTSCRIPT_LIB_PATH})
+if (WIN32)
+    get_filename_component(_gs_lib_dir ${GHOSTSCRIPT_LIB_PATH} DIRECTORY)
+
+    set_property (TARGET libgs PROPERTY IMPORTED_IMPLIB ${GHOSTSCRIPT_LIB_PATH})
+    set_property (TARGET libgs PROPERTY IMPORTED_LOCATION ${_gs_lib_dir}/gsdll${_lib_suffix}.dll)
+else()
+    set_property (TARGET libgs PROPERTY IMPORTED_LOCATION ${GHOSTSCRIPT_LIB_PATH})
+endif()
 target_link_libraries (${PROJECT_NAME} libgs)
+
+if (GHOSTSCRIPT_IN_SOURCE_TREE EQUAL 1)
+    add_definitions(/DGS_IN_SOURCE_TREE)
+endif()
 
 
 if (WIN32)
 	install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION obs-plugins/${_lib_suffix}bit)
 	install(FILES ${CMAKE_BINARY_DIR}/Debug/${PROJECT_NAME}.pdb DESTINATION obs-plugins/${_lib_suffix}bit CONFIGURATIONS Debug)
-	install(FILES ${GHOSTSCRIPT_LIB_DIR}/gsdll${_lib_suffix}.dll DESTINATION obs-plugins/${_lib_suffix}bit)
+	install(FILES ${_gs_lib_dir}/gsdll${_lib_suffix}.dll DESTINATION obs-plugins/${_lib_suffix}bit)
 else()
 	install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION obs-plugins/${_lib_suffix}bit)
 endif()
