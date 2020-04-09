@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <inttypes.h>
+#include <limits.h>
 
 // Ghostscript expects a non-standard #define for indicating a Windows environment, apparently.
 // This ensures the Ghostscript API functions are referenced by the linker with the correct
@@ -13,8 +14,8 @@
 #define _WINDOWS_
 #endif
 
-#include <psi/iapi.h>
-#include <devices/gdevdsp.h>
+#include <ghostscript/gdevdsp.h>
+#include <ghostscript/iapi.h>
 
 #include <config.h>
 
@@ -153,6 +154,7 @@ static void pdf_source_load(struct pdf_source *context)
 	{
 		char *command_ignored = "gs";
 		char *device_type = "-sDEVICE=display";
+		char *no_pause = "-dNOPAUSE";
 		struct dstr display_format_buffer = { 0 };
 		struct dstr display_handle_buffer = { 0 };
 		struct dstr page_list_buffer = { 0 };
@@ -167,6 +169,7 @@ static void pdf_source_load(struct pdf_source *context)
 
 		da_push_back(arguments, &command_ignored);
 		da_push_back(arguments, &device_type);
+		da_push_back(arguments, &no_pause);
 		da_push_back(arguments, &display_handle_buffer.array);
 		da_push_back(arguments, &display_format_buffer.array);
 		da_push_back(arguments, &page_list_buffer.array);
@@ -441,7 +444,7 @@ static void pdf_source_key_click(void *data,
 
 	if (!key_up)
 	{
-		enum obs_key_t key = obs_key_from_virtual_key(event->native_vkey);
+		obs_key_t key = obs_key_from_virtual_key(event->native_vkey);
 
 		switch (key)
 		{
